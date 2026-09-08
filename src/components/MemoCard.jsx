@@ -44,26 +44,25 @@ export default function MemoCard({ memo, onChange, outlookMode, autoOutlook, toa
   const reprocess = () => run(() => api.reprocessMemo(memo.id), '再実行しました')
   const outlookRegister = () => run(() => api.outlookRegister(memo.id))
 
-  const canCheck = memo.category === 'todo' || memo.category === 'shopping'
   const isEvent = memo.category === 'schedule' || memo.category === 'todo'
   const longText = memo.text && memo.text !== memo.title
 
   return (
     <article className={'card c-' + memo.category + (done ? ' done' : '')}>
       <div className="card-head">
-        {canCheck && (
-          <button className={'chk' + (done ? ' on' : '')} onClick={toggleDone} aria-label="完了" disabled={busy}>
-            <i className={'ti ' + (done ? 'ti-check' : '')} />
-          </button>
-        )}
         <div className="card-main">
           <div className="card-title" onClick={editTitle} title="タップで見出し編集">{memo.title || memo.text}</div>
           {memo.category === 'schedule' && <div className="card-meta"><i className="ti ti-calendar-event" /> {fmtRange(memo)}</div>}
           {memo.category === 'todo' && memo.due_at && <div className="card-meta"><i className="ti ti-clock" /> 期限 {fmtDT(memo.due_at, /00:00:00$/.test(memo.due_at))}</div>}
         </div>
-        <select className={'badge c-' + memo.category} value={memo.category} onChange={changeCat} disabled={busy} aria-label="カテゴリ変更">
-          {CATS.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
-        </select>
+        <div className="card-side">
+          <select className={'badge c-' + memo.category} value={memo.category} onChange={changeCat} disabled={busy} aria-label="カテゴリ変更">
+            {CATS.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+          </select>
+          <button className={'btn-done' + (done ? ' on' : '')} onClick={toggleDone} disabled={busy} aria-label={done ? '未完了に戻す' : '完了'}>
+            <i className={'ti ' + (done ? 'ti-arrow-back-up' : 'ti-check')} /> {done ? '戻す' : '完了'}
+          </button>
+        </div>
       </div>
 
       {longText && (
