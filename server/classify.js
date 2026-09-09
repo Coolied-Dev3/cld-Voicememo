@@ -103,7 +103,20 @@ export function parseJapaneseDateTime(input, now = new Date()) {
     if (h > 23 || mi > 59) continue
     times.push({ h, mi, tok: t[0] })
   }
-  if (times.length) { hasTime = true; tokens.push(...times.map((x) => x.tok)) }
+  // 数字のない時間帯表現（午前中・午後・夕方 など）はおおよその時間枠にする
+  if (!times.length) {
+    const spans = [
+      [/午前中/, 9, 12], [/朝(?!食)/, 8, 9], [/昼(?:休み|過ぎ)?/, 12, 13], [/午後/, 13, 17], [/夕方/, 17, 18], [/(?:夜|晩)/, 19, 20],
+    ]
+    for (const [re, sh, eh] of spans) {
+      const mm = s.match(re)
+      if (mm && !/\d/.test(s.slice(mm.index + mm[0].length, mm.index + mm[0].length + 2))) {
+        times.push({ h: sh, mi: 0, tok: mm[0] }, { h: eh, mi: 0, tok: '' })
+        break
+      }
+    }
+    if (times.length) { hasTime = true; tokens.push(times[0].tok); if (!hasDate) base = new Date(today) }
+  } else { hasTime = true; tokens.push(...times.map((x) => x.tok)) }
 
   // 日付が無く時刻だけ → 今日
   if (!hasDate && hasTime) base = new Date(today)
@@ -112,7 +125,7 @@ export function parseJapaneseDateTime(input, now = new Date()) {
   let start, end = null
   if (hasTime) {
     start = new Date(base); start.setHours(times[0].h, times[0].mi, 0, 0)
-    if (times[1] && /(から|~|-|〜)/.test(s)) {
+    if (times[1] && (times[1].tok === '' || /(から|~|-|〜)/.test(s))) {
       let eh = times[1].h
       if (eh < 12 && (eh < times[0].h || (eh === times[0].h && times[1].mi <= times[0].mi))) eh += 12 // 「2時から4時」の4時は16時
       end = new Date(base); end.setHours(eh, times[1].mi, 0, 0)
@@ -197,19 +210,16 @@ export function classifyText(text, now = new Date()) {
   const dt = parseJapaneseDateTime(body, now)
   const hasDT = !!dt.start
 
+  // 振り分けルール（2026-09-09 変更）
+  //   1. 文頭の明示指定（アイデア、／買い物、／調べて、…）が最優先
+  //   2. 調べもの・買い物・アイデアは、それぞれの明確なキーワードがあるときだけ
+  //   3. それ以外は「日付や時刻の指定があれば予定、なければやること」
   if (!category) {
     if (SEARCH_RE.test(body)) category = 'search'
     else if (SHOP_RE.test(body)) category = 'shopping'
-    else if (hasDT) {
-      if (dt.deadline && !MEETING_RE.test(body)) category = 'todo'
-      else if (dt.hasTime || MEETING_RE.test(body)) category = 'schedule'
-      else if (TODO_RE.test(body)) category = 'todo'
-      else category = 'schedule'
-    } else if (IDEA_STRONG_RE.test(body)) category = 'idea'
-    else if (MEETING_RE.test(body) && !TODO_RE.test(body)) category = 'schedule'
-    else if (TODO_RE.test(body)) category = 'todo'
-    else if (IDEA_RE.test(body)) category = 'idea'
-    else category = 'idea'
+    else if (IDEA_STRONG_RE.test(body)) category = 'idea'
+    else if (hasDT) category = 'schedule'
+    else category = 'todo'
   }
 
   const res = { category, title: '', start_at: null, end_at: null, all_day: 0, due_at: null, search_query: null }
