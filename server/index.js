@@ -273,6 +273,8 @@ app.post('/api/memos', h(async (req, res) => {
     }
   }
   const now = nowStr()
+  // やることで期限の指定がなければ、登録日を期限の初期値にする（To Do の「計画済み」に出るように）
+  if (c.category === 'todo' && !c.due_at) c.due_at = now.slice(0, 10) + ' 00:00:00'
   const row = {
     user_id: req.user.id,
     text, category: c.category, title: c.title || text.slice(0, 40), status: 'open',
@@ -303,7 +305,7 @@ app.patch('/api/memos/:id', h(async (req, res) => {
     if (b.category === 'search') { f.search_query = f.search_query || m.search_query || rule.search_query || m.text; f.title = f.search_query }
     else if (!f.title) f.title = rule.category === b.category ? rule.title : (m.title || rule.title)
     if (b.category === 'schedule' && !m.start_at) { f.start_at = rule.start_at || m.due_at; f.end_at = rule.end_at; f.all_day = rule.all_day }
-    if (b.category === 'todo' && !m.due_at) f.due_at = m.start_at || rule.start_at
+    if (b.category === 'todo' && !m.due_at) f.due_at = m.start_at || rule.start_at || (nowStr().slice(0, 10) + ' 00:00:00')
     Object.assign(f, initialStatus(b.category))
     f.search_summary = null; f.search_sources = null; f.outlook_id = null; f.outlook_url = null; f.outlook_error = null
     reprocess = true

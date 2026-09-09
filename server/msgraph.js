@@ -146,12 +146,30 @@ export async function deleteItem(db, userId, memo) {
   return true
 }
 
+// To Do タスクの期限を設定（memo.due_at が無ければ登録日）
+export async function setTaskDue(db, userId, memo) {
+  if (memo.category !== 'todo' || !memo.outlook_id || !/^[A-Za-z0-9_=-]{40,}$/.test(memo.outlook_id)) return false
+  const due = memo.due_at || (String(memo.created_at).slice(0, 10) + ' 00:00:00')
+  const { start } = eventWindow({ ...memo, start_at: due, all_day: 0 })
+  const token = await accessToken(db, userId)
+  const list = await defaultTaskList(token)
+  await graphFetch(token, `/me/todo/lists/${encodeURIComponent(list.id)}/tasks/${encodeURIComponent(memo.outlook_id)}`, {
+    method: 'PATCH',
+    body: {
+      dueDateTime: { dateTime: iso(start), timeZone: TZ },
+      isReminderOn: true,
+      reminderDateTime: { dateTime: iso(new Date(start.getTime() + (/00:00:00$/.test(due) ? 9 * 3600e3 : -3600e3))), timeZone: TZ },
+    },
+  })
+  return true
+}
+
 // 診断用: To Do タスクの現在の状態を取得
 export async function getTask(db, userId, memo) {
   const token = await accessToken(db, userId)
   const list = await defaultTaskList(token)
   const t = await graphFetch(token, `/me/todo/lists/${encodeURIComponent(list.id)}/tasks/${encodeURIComponent(memo.outlook_id)}`)
-  return { list: list.displayName, id: t.id, title: t.title, status: t.status, completed: t.completedDateTime?.dateTime || null, modified: t.lastModifiedDateTime }
+  return { list: list.displayName, id: t.id, title: t.title, status: t.status, due: t.dueDateTime?.dateTime || null, completed: t.completedDateTime?.dateTime || null, modified: t.lastModifiedDateTime }
 }
 
 // 診断用: 既定リストのタスク一覧（直近 50 件）
