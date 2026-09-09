@@ -101,6 +101,7 @@ export default function MemoCard({ memo, onChange, outlookMode, autoOutlook, toa
           )}
           {memo.outlook_status === 'pending' && autoOutlook && <span className="pending"><span className="spin" /> Outlook に登録中…</span>}
           {memo.outlook_status === 'error' && <span className="err" title={memo.outlook_error}><i className="ti ti-alert-circle" /> 自動登録に失敗（{(memo.outlook_error || '').slice(0, 60)}）</span>}
+          {memo.outlook_status === 'done' && memo.outlook_error && <span className="err small" title={memo.outlook_error}><i className="ti ti-alert-circle" /> {memo.outlook_error.slice(0, 60)}</span>}
           {memo.outlook_status !== 'done' && memo.outlook_link && (
             <a className="btn-outlook" href={memo.outlook_link} target="_blank" rel="noopener noreferrer">
               <i className="ti ti-brand-office" /> Outlook に{memo.category === 'todo' ? '期限を' : ''}登録

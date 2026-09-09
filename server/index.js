@@ -310,6 +310,12 @@ app.patch('/api/memos/:id', h(async (req, res) => {
   }
   if (b.reprocess) { Object.assign(f, initialStatus(f.category || m.category)); reprocess = true }
   await updateMemo(id, f)
+  // やることの完了 / 未完了を Microsoft To Do にも反映（連携済み・To Do 登録済みのときだけ。失敗しても続行）
+  if ('status' in f && f.status !== m.status && m.category === 'todo' && m.outlook_status === 'done' && m.outlook_id
+      && ms.msEnabled && (await ms.isConnected(db, m.user_id))) {
+    try { await ms.setTaskCompleted(db, m.user_id, m, f.status === 'done'); await updateMemo(id, { outlook_error: null }) }
+    catch (e) { console.warn('[graph] To Do の完了反映に失敗:', e.message); await updateMemo(id, { outlook_error: 'To Do の完了反映に失敗: ' + e.message }) }
+  }
   res.json(decorate(await getMemo(id, req.user.id)))
   if (reprocess) setImmediate(() => processMemo(id).catch(console.error))
 }))

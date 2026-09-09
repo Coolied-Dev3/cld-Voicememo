@@ -146,6 +146,18 @@ export async function deleteItem(db, userId, memo) {
   return true
 }
 
+// やることの完了 / 未完了を To Do 側にも反映
+export async function setTaskCompleted(db, userId, memo, done) {
+  if (memo.category !== 'todo' || !memo.outlook_id || !/^[A-Za-z0-9_=-]{40,}$/.test(memo.outlook_id)) return false
+  const token = await accessToken(db, userId)
+  const list = await defaultTaskList(token)
+  await graphFetch(token, `/me/todo/lists/${encodeURIComponent(list.id)}/tasks/${encodeURIComponent(memo.outlook_id)}`, {
+    method: 'PATCH',
+    body: { status: done ? 'completed' : 'notStarted' },
+  })
+  return true
+}
+
 // やること → Microsoft To Do（既定のリスト）。期限があれば dueDateTime を設定
 export async function createTask(db, userId, memo) {
   const token = await accessToken(db, userId)
