@@ -152,6 +152,19 @@ DB_NAME=voicememo
 起動時に DB とテーブルを自動作成します（手動なら `schema_mysql.sql`）。バックアップ: `mysqldump -u root -p voicememo > backup.sql`。
 SQLite の場合は `data/voicememo.db` と `data/secret.key` をコピーしてください。
 
+### SQLite から MySQL への移行
+
+```bash
+# 1) server/.env に DB_HOST/DB_USER/DB_PASSWORD/DB_NAME を設定（DB_DRIVER はまだ sqlite のまま）
+node server/migrate-to-mysql.js          # 接続確認と件数表示
+node server/migrate-to-mysql.js --apply  # MySQL 側を空にして全件コピー（id もそのまま）
+# 2) server/.env の DB_DRIVER=mysql に変更してサーバーを再起動（管理者 PowerShell で update-prod.ps1）
+node server/smoke-mysql.js               # 任意: 別ポート(3012)で MySQL モードのサーバーを起動して動作確認
+```
+
+`data/secret.key`（Microsoft 連携トークンの暗号化キー）はそのまま使うため、再連携は不要です。
+本番は 2026-09-09 に MySQL へ移行済み（`data/voicememo.db` は移行時点のバックアップ）。
+
 ## API
 
 | メソッド | パス | 内容 |
