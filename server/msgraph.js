@@ -146,6 +146,22 @@ export async function deleteItem(db, userId, memo) {
   return true
 }
 
+// 診断用: To Do タスクの現在の状態を取得
+export async function getTask(db, userId, memo) {
+  const token = await accessToken(db, userId)
+  const list = await defaultTaskList(token)
+  const t = await graphFetch(token, `/me/todo/lists/${encodeURIComponent(list.id)}/tasks/${encodeURIComponent(memo.outlook_id)}`)
+  return { list: list.displayName, id: t.id, title: t.title, status: t.status, completed: t.completedDateTime?.dateTime || null, modified: t.lastModifiedDateTime }
+}
+
+// 診断用: 既定リストのタスク一覧（直近 50 件）
+export async function listTasks(db, userId) {
+  const token = await accessToken(db, userId)
+  const list = await defaultTaskList(token)
+  const r = await graphFetch(token, `/me/todo/lists/${encodeURIComponent(list.id)}/tasks?$top=50`)
+  return r.value || []
+}
+
 // やることの完了 / 未完了を To Do 側にも反映
 export async function setTaskCompleted(db, userId, memo, done) {
   if (memo.category !== 'todo' || !memo.outlook_id || !/^[A-Za-z0-9_=-]{40,}$/.test(memo.outlook_id)) return false
