@@ -115,7 +115,9 @@ export default function MemoCard({ memo, onChange, outlookMode, autoOutlook, toa
       )}
 
       <div className="card-foot">
-        <span className="ts"><i className={'ti ' + (memo.source === 'voice' ? 'ti-microphone' : 'ti-keyboard')} /> {fmtCreated(memo.created_at)}{memo.ai_used ? ' · AI' : ''}</span>
+        <span className="ts" title={memo.source === 'todo' ? 'Microsoft To Do から取り込み' : memo.source === 'voice' ? '音声入力' : 'キーボード入力'}>
+          <i className={'ti ' + (memo.source === 'todo' ? 'ti-checklist' : memo.source === 'voice' ? 'ti-microphone' : 'ti-keyboard')} /> {fmtCreated(memo.created_at)}{memo.source === 'todo' ? ' · To Do' : ''}{memo.ai_used ? ' · AI' : ''}
+        </span>
         <button className="lnk danger" onClick={del} disabled={busy}><i className="ti ti-trash" /> 削除</button>
       </div>
     </article>

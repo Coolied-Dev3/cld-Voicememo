@@ -4,14 +4,45 @@
     {
       "name": "voicememo-server",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["server/index.js"],
+      "runtimeArgs": [
+        "server/index.js"
+      ],
       "port": 3002
     },
     {
       "name": "voicememo-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:all"],
+      "runtimeArgs": [
+        "run",
+        "dev:all"
+      ],
       "port": 5173
+    },
+    {
+      "name": "essay-chk-sqlite-test",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set DB_DRIVER=sqlite&& set PORT=3013&& node C:/2026.09-ed-essay-CHK/server/index.js"
+      ],
+      "port": 3013
+    },
+    {
+      "name": "essay-chk",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "C:/2026.09-ed-essay-CHK/server/index.js"
+      ],
+      "port": 3003
+    },
+    {
+      "name": "essay-chk-mysql-test",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set PORT=3023&& node C:/2026.09-ed-essay-CHK/server/index.js"
+      ],
+      "port": 3023
     }
   ]
 }

@@ -69,11 +69,13 @@ export async function completeAuth(db, state, code) {
 
 export async function status(db, userId) {
   const row = await db.get('SELECT account, updated_at FROM ms_tokens WHERE user_id=?', [userId])
-  return { enabled: msEnabled, connected: !!row, account: row?.account || null, since: row?.updated_at || null }
+  const sync = row ? await db.get('SELECT last_sync_at, last_error FROM ms_sync WHERE user_id=?', [userId]) : null
+  return { enabled: msEnabled, connected: !!row, account: row?.account || null, since: row?.updated_at || null, lastSync: sync?.last_sync_at || null, syncError: sync?.last_error || null }
 }
 export async function disconnect(db, userId) {
   cache.delete(userId)
   await db.run('DELETE FROM ms_tokens WHERE user_id=?', [userId])
+  await db.run('DELETE FROM ms_sync WHERE user_id=?', [userId])
 }
 export async function isConnected(db, userId) {
   return !!(await db.get('SELECT user_id FROM ms_tokens WHERE user_id=?', [userId]))
@@ -93,14 +95,14 @@ async function accessToken(db, userId) {
 }
 
 async function graphFetch(token, path, opts = {}) {
-  const r = await fetch(GRAPH + path, {
+  const r = await fetch(path.startsWith('http') ? path : GRAPH + path, {
     ...opts,
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
     body: opts.body ? JSON.stringify(opts.body) : undefined,
     signal: AbortSignal.timeout(20000),
   })
   const j = r.status === 204 ? {} : await r.json().catch(() => ({}))
-  if (!r.ok) throw new Error(j.error?.message || `Graph HTTP ${r.status}`)
+  if (!r.ok) { const e = new Error(j.error?.message || `Graph HTTP ${r.status}`); e.status = r.status; e.code = j.error?.code; throw e }
   return j
 }
 
@@ -144,6 +146,114 @@ export async function deleteItem(db, userId, memo) {
     await graphFetch(token, `/me/events/${encodeURIComponent(memo.outlook_id)}`, { method: 'DELETE' })
   }
   return true
+}
+
+// ---------- To Do → 本システム の同期（差分取得） ----------
+// Graph の dateTimeTimeZone → ローカル 'YYYY-MM-DD HH:MM:SS'
+function fromGraphDT(dt) {
+  if (!dt?.dateTime) return null
+  const s = dt.dateTime.replace(/\.\d+$/, '')
+  const d = dt.timeZone === 'UTC' || !dt.timeZone ? new Date(s + 'Z') : new Date(s) // それ以外は日本時間とみなす
+  if (Number.isNaN(d.getTime())) return null
+  return nowStr(d)
+}
+// 期限は日付だけを使う（終日）
+const dueFromGraph = (dt) => { const s = fromGraphDT(dt); return s ? s.slice(0, 10) + ' 00:00:00' : null }
+
+// 1 ユーザー分の同期。戻り値 { added, updated, removed }
+// 初回はデルタリンクが無いので全件を読み、未完了のものだけ取り込む。以降は変更分だけ。
+export async function syncTasks(db, userId) {
+  const token = await accessToken(db, userId)
+  let st = await db.get('SELECT * FROM ms_sync WHERE user_id=?', [userId])
+  if (!st) { await db.run('INSERT INTO ms_sync (user_id) VALUES (?)', [userId]); st = { user_id: userId } }
+  let listId = st.list_id
+  if (!listId) { listId = (await defaultTaskList(token)).id; await db.run('UPDATE ms_sync SET list_id=? WHERE user_id=?', [listId, userId]) }
+
+  const initial = !st.delta_link
+  let url = st.delta_link || `/me/todo/lists/${encodeURIComponent(listId)}/tasks/delta`
+  const items = []
+  let deltaLink = null
+  // 初回は全件走査になるため 1 ページ 512 件（上限）で取得。最大 200 ページ（約 10 万件）まで
+  for (let i = 0; i < 200 && url; i++) {
+    let page
+    try { page = await graphFetch(token, url, { headers: { Prefer: 'odata.maxpagesize=999' } }) } catch (e) {
+      if (e.status === 410 || e.status === 404) { // デルタ期限切れ / リスト変更 → 初回からやり直し
+        await db.run('UPDATE ms_sync SET delta_link=NULL, list_id=NULL WHERE user_id=?', [userId])
+        throw new Error('差分リンクが無効になったため次回に全件再取得します')
+      }
+      throw e
+    }
+    items.push(...(page.value || []))
+    url = page['@odata.nextLink'] || null
+    if (page['@odata.deltaLink']) deltaLink = page['@odata.deltaLink']
+  }
+
+  const r = { added: 0, updated: 0, removed: 0 }
+  for (const t of items) {
+    const memo = await db.get('SELECT * FROM memos WHERE user_id=? AND outlook_id=?', [userId, t.id])
+    if (t['@removed']) {
+      if (memo) { await db.run('DELETE FROM memos WHERE id=?', [memo.id]); r.removed++ }
+      continue
+    }
+    const done = t.status === 'completed'
+    if (memo) {
+      const f = {}
+      if ((memo.status === 'done') !== done) f.status = done ? 'done' : 'open'
+      if (t.title && t.title !== memo.title && memo.category === 'todo') f.title = t.title.slice(0, 255)
+      const due = dueFromGraph(t.dueDateTime)
+      if (memo.category === 'todo' && due && due !== memo.due_at) f.due_at = due
+      if (Object.keys(f).length) {
+        f.updated_at = nowStr()
+        await db.run(`UPDATE memos SET ${Object.keys(f).map((k) => k + '=?').join(',')} WHERE id=?`, [...Object.values(f), memo.id])
+        r.updated++
+      }
+      continue
+    }
+    if (initial && done) continue // 初回は未完了のみ取り込む
+    if (done && !memo) continue     // 取り込み前に完了したものは無視
+    const title = String(t.title || '').trim().slice(0, 255)
+    if (!title) continue
+    const bodyText = (t.body?.contentType === 'text' ? t.body.content : String(t.body?.content || '').replace(/<[^>]+>/g, '')).trim()
+    const text = bodyText && !bodyText.includes('cld-Voice Memo') ? `${title}\n${bodyText}`.slice(0, 2000) : title
+    const created = t.createdDateTime ? nowStr(new Date(t.createdDateTime)) : nowStr()
+    const cols = ['user_id', 'text', 'category', 'title', 'status', 'due_at', 'all_day', 'search_status', 'outlook_status', 'outlook_id', 'outlook_url', 'source', 'ai_used', 'created_at', 'updated_at']
+    const vals = [userId, text, 'todo', title, done ? 'done' : 'open', dueFromGraph(t.dueDateTime) || created.slice(0, 10) + ' 00:00:00', 0, 'none', 'done', t.id, 'https://to-do.office.com/tasks/', 'todo', 0, created, nowStr()]
+    await db.run(`INSERT INTO memos (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`, vals)
+    r.added++
+  }
+  if (!deltaLink && !st.delta_link) throw new Error('全件走査が上限に達しました（差分リンク未取得）')
+  await db.run('UPDATE ms_sync SET delta_link=?, last_sync_at=?, last_error=NULL WHERE user_id=?', [deltaLink || st.delta_link || null, nowStr(), userId])
+  return r
+}
+
+// 診断用: デルタ取得の各ページのキーと件数
+export async function debugDelta(db, userId, { query = '', prefer = '', maxPages = 3 } = {}) {
+  const token = await accessToken(db, userId)
+  const list = await defaultTaskList(token)
+  const out = []
+  let url = `/me/todo/lists/${encodeURIComponent(list.id)}/tasks/delta${query}`
+  const t0 = Date.now()
+  for (let i = 0; i < maxPages && url; i++) {
+    let page
+    try { page = await graphFetch(token, url, prefer ? { headers: { Prefer: prefer } } : {}) } catch (e) { out.push({ page: i, error: e.message }); break }
+    out.push({ page: i, count: (page.value || []).length, next: !!page['@odata.nextLink'], delta: !!page['@odata.deltaLink'], ms: Date.now() - t0 })
+    url = page['@odata.nextLink'] || null
+  }
+  return out
+}
+
+// 連携済み全ユーザーを同期（ポーラーから呼ぶ）
+export async function syncAll(db, log = console) {
+  const users = await db.all('SELECT user_id FROM ms_tokens')
+  for (const { user_id } of users) {
+    try {
+      const r = await syncTasks(db, user_id)
+      if (r.added || r.updated || r.removed) log.log(`[todo-sync] user=${user_id} 追加${r.added} 更新${r.updated} 削除${r.removed}`)
+    } catch (e) {
+      log.warn(`[todo-sync] user=${user_id} 失敗: ${e.message}`)
+      await db.run('UPDATE ms_sync SET last_error=? WHERE user_id=?', [String(e.message).slice(0, 500), user_id]).catch(() => {})
+    }
+  }
 }
 
 // To Do タスクの期限を設定（memo.due_at が無ければ登録日）

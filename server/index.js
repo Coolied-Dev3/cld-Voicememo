@@ -177,6 +177,12 @@ app.get('/api/ms/callback', h(async (req, res) => {
   }
 }))
 app.get('/api/ms/status', requireAuth, h(async (req, res) => res.json(await ms.status(db, req.user.id))))
+// To Do の即時同期（画面の更新ボタンから）
+app.post('/api/ms/sync', requireAuth, h(async (req, res) => {
+  if (!ms.msEnabled || !(await ms.isConnected(db, req.user.id))) return res.json({ synced: false })
+  try { res.json({ synced: true, ...(await ms.syncTasks(db, req.user.id)) }) }
+  catch (e) { res.json({ synced: false, error: e.message }) }
+}))
 app.post('/api/ms/disconnect', requireAuth, h(async (req, res) => { await ms.disconnect(db, req.user.id); res.json({ ok: true }) }))
 
 // ---------- ユーザー管理（管理者）----------
@@ -364,6 +370,20 @@ if (fs.existsSync(DIST_DIR)) {
   app.get(/^(?!\/api\/).*/, (_req, res) => res.sendFile(path.join(DIST_DIR, 'index.html')))
 } else {
   app.get('/', (_req, res) => res.type('text').send('cld-Voice Memo API は動作中です。画面は npm run build で dist を作るか、開発時は http://localhost:5173 を開いてください。'))
+}
+
+// ---------- To Do 同期ポーラー（MS_SYNC_INTERVAL 秒ごと。0 で無効）----------
+const SYNC_INTERVAL = Number(process.env.MS_SYNC_INTERVAL ?? 60)
+if (ms.msEnabled && SYNC_INTERVAL > 0) {
+  let syncing = false
+  const tick = async () => {
+    if (syncing) return
+    syncing = true
+    try { await ms.syncAll(db) } finally { syncing = false }
+  }
+  setTimeout(tick, 5000)
+  setInterval(tick, SYNC_INTERVAL * 1000)
+  console.log(`[todo-sync] ${SYNC_INTERVAL} 秒ごとに Microsoft To Do を同期します`)
 }
 
 // 起動時に未処理のものを再開・期限切れセッションの掃除

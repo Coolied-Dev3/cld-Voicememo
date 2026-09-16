@@ -36,6 +36,7 @@ export const deletePasskey = (id) => req(`/api/passkey/${id}`, { method: 'DELETE
 // Microsoft 連携
 export const msStatus = () => req('/api/ms/status')
 export const msDisconnect = () => req('/api/ms/disconnect', { method: 'POST' })
+export const msSync = () => req('/api/ms/sync', { method: 'POST' })
 export const msConnectUrl = () => `${BASE}/api/ms/connect`
 
 // ユーザー管理（管理者）

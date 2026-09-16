@@ -38,6 +38,9 @@ export default function App() {
   const [memos, setMemos] = useState([])
   const [tab, setTab] = useState(() => { try { return localStorage.getItem('vm.tab') || 'all' } catch { return 'all' } })
   const [showDone, setShowDone] = useState(false)
+  // やることの期限フィルタ: true = 14 日以内（既定）, false = 全期間
+  const [dueSoon, setDueSoon] = useState(() => { try { return localStorage.getItem('vm.dueSoon') !== '0' } catch { return true } })
+  useEffect(() => { try { localStorage.setItem('vm.dueSoon', dueSoon ? '1' : '0') } catch {} }, [dueSoon])
   const [health, setHealth] = useState(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -112,13 +115,18 @@ export default function App() {
     setPanel(null); setMemos([]); setSession(null)
   }
 
+  // 期限が 14 日より先の「やること」を隠す（既定）
+  const dueLimit = useMemo(() => { const d = new Date(); d.setDate(d.getDate() + 14); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} 23:59:59` }, [memos])
+  const inRange = (m) => !dueSoon || m.category !== 'todo' || !m.due_at || String(m.due_at) <= dueLimit
+  const hiddenByDue = memos.filter((m) => !inRange(m) && (showDone || m.status !== 'done')).length
+
   const counts = useMemo(() => {
     const c = { all: 0 }
-    for (const m of memos) { if (m.status === 'done') continue; c.all++; c[m.category] = (c[m.category] || 0) + 1 }
+    for (const m of memos) { if (m.status === 'done' || !inRange(m)) continue; c.all++; c[m.category] = (c[m.category] || 0) + 1 }
     return c
-  }, [memos])
+  }, [memos, dueSoon]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const shown = memos.filter((m) => (tab === 'all' || m.category === tab) && (showDone || m.status !== 'done'))
+  const shown = memos.filter((m) => (tab === 'all' || m.category === tab) && (showDone || m.status !== 'done') && inRange(m))
 
   if (session === undefined) return <div className="app"><div className="empty"><span className="spin" /> 確認中…</div></div>
   if (!session) return <div className="app"><Login onLogin={() => refreshSession()} />{toastNode}</div>
@@ -157,8 +165,13 @@ export default function App() {
             ))}
           </nav>
           <div className="list-tools">
-            <label className="switch"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} /><span>完了済みも表示</span></label>
-            <span className="muted">{shown.length} 件 <button className="lnk" onClick={load} aria-label="更新"><i className="ti ti-refresh" /></button></span>
+            <span className="tools-left">
+              <label className="switch"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} /><span>完了済みも表示</span></label>
+              <button className={'chip small-chip' + (dueSoon ? ' on' : '')} onClick={() => setDueSoon(!dueSoon)} title="やることの期限で絞り込み">
+                <i className={'ti ' + (dueSoon ? 'ti-calendar-due' : 'ti-calendar')} /> {dueSoon ? `期限 14日以内${hiddenByDue ? `（+${hiddenByDue} 件非表示）` : ''}` : '全期間'}
+              </button>
+            </span>
+            <span className="muted">{shown.length} 件 <button className="lnk" onClick={async () => { if (session?.ms?.connected) { try { await api.msSync() } catch {} } load() }} aria-label="更新（To Do も同期）" title="更新（To Do も同期）"><i className="ti ti-refresh" /></button></span>
           </div>
           <div className="list">
             {loading ? <div className="empty"><span className="spin" /> 読み込み中…</div>

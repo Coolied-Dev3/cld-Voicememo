@@ -78,7 +78,10 @@ export default function Account({ user, health, onClose, onLogout, toast }) {
           {!health?.ms && <p className="muted small">サーバーに MS_CLIENT_ID が設定されていないため、予定は「Outlook に登録」リンクで登録します。</p>}
           {health?.ms && ms && (ms.connected ? (
             <>
-              <p className="small"><i className="ti ti-circle-check ok" /> 連携中: <b>{ms.account}</b><br /><span className="muted">予定は Outlook 予定表に、やることは Microsoft To Do に自動登録されます。</span></p>
+              <p className="small"><i className="ti ti-circle-check ok" /> 連携中: <b>{ms.account}</b><br />
+                <span className="muted">予定は Outlook 予定表に、やることは Microsoft To Do に自動登録されます。To Do 側で登録・完了・削除したタスクも約 1 分ごとに取り込みます。</span><br />
+                <span className="muted">最終同期: {ms.lastSync ? String(ms.lastSync).slice(0, 16) : 'まだ'}{ms.syncError ? <span className="err">（エラー: {ms.syncError}）</span> : ''}</span>
+              </p>
               <button className="btn-outline" onClick={disconnectMs}>連携を解除</button>
             </>
           ) : (

@@ -83,6 +83,13 @@ CREATE TABLE IF NOT EXISTS ms_tokens (
   scope         TEXT,
   updated_at    TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS ms_sync (
+  user_id       INTEGER PRIMARY KEY,
+  list_id       TEXT,
+  delta_link    TEXT,
+  last_sync_at  TEXT,
+  last_error    TEXT
+);
 `,
   mysql: `
 CREATE TABLE IF NOT EXISTS memos (
@@ -144,6 +151,13 @@ CREATE TABLE IF NOT EXISTS ms_tokens (
   refresh_token TEXT NOT NULL,
   scope         VARCHAR(512) NULL,
   updated_at    DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS ms_sync (
+  user_id       INT PRIMARY KEY,
+  list_id       VARCHAR(255) NULL,
+  delta_link    TEXT NULL,
+  last_sync_at  DATETIME NULL,
+  last_error    TEXT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `,
 }
