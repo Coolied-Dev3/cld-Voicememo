@@ -94,6 +94,11 @@ a{color:var(--acc)}
 .list-tools{display:flex;justify-content:space-between;align-items:center;padding:8px 14px 0;font-size:13px;gap:8px;flex-wrap:wrap}
 .tools-left{display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap}
 .chip.small-chip{padding:4px 10px;font-size:12px}
+/* 期限の 3 択（当日 / 14日以内 / 全表示） */
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:999px;overflow:hidden}
+.seg-btn{border:none;background:transparent;color:var(--text2);padding:5px 11px;font-size:12.5px;cursor:pointer;border-right:1px solid var(--line2)}
+.seg-btn:last-child{border-right:none}
+.seg-btn.on{background:var(--acc);color:#fff;font-weight:600}
 .muted{color:var(--text2);font-size:12.5px}
 
 /* list & cards */

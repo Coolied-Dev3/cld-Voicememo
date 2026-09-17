@@ -39,8 +39,9 @@ export default function App() {
   const [tab, setTab] = useState(() => { try { return localStorage.getItem('vm.tab') || 'all' } catch { return 'all' } })
   const [showDone, setShowDone] = useState(false)
   // やることの期限フィルタ: true = 14 日以内（既定）, false = 全期間
-  const [dueSoon, setDueSoon] = useState(() => { try { return localStorage.getItem('vm.dueSoon') !== '0' } catch { return true } })
-  useEffect(() => { try { localStorage.setItem('vm.dueSoon', dueSoon ? '1' : '0') } catch {} }, [dueSoon])
+  // やることの期限フィルタ: today = 当日まで（期限切れ含む・既定） / 14d = 14 日以内 / all = 全期間
+  const [dueRange, setDueRange] = useState(() => { try { return ['today', '14d', 'all'].includes(localStorage.getItem('vm.dueRange')) ? localStorage.getItem('vm.dueRange') : 'today' } catch { return 'today' } })
+  useEffect(() => { try { localStorage.setItem('vm.dueRange', dueRange) } catch {} }, [dueRange])
   const [health, setHealth] = useState(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -116,15 +117,19 @@ export default function App() {
   }
 
   // 期限が 14 日より先の「やること」を隠す（既定）
-  const dueLimit = useMemo(() => { const d = new Date(); d.setDate(d.getDate() + 14); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} 23:59:59` }, [memos])
-  const inRange = (m) => !dueSoon || m.category !== 'todo' || !m.due_at || String(m.due_at) <= dueLimit
+  const dueLimit = useMemo(() => {
+    if (dueRange === 'all') return null
+    const d = new Date(); d.setDate(d.getDate() + (dueRange === '14d' ? 14 : 0))
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} 23:59:59`
+  }, [dueRange, memos])
+  const inRange = (m) => !dueLimit || m.category !== 'todo' || !m.due_at || String(m.due_at) <= dueLimit
   const hiddenByDue = memos.filter((m) => !inRange(m) && (showDone || m.status !== 'done')).length
 
   const counts = useMemo(() => {
     const c = { all: 0 }
     for (const m of memos) { if (m.status === 'done' || !inRange(m)) continue; c.all++; c[m.category] = (c[m.category] || 0) + 1 }
     return c
-  }, [memos, dueSoon]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [memos, dueLimit]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const shown = memos.filter((m) => (tab === 'all' || m.category === tab) && (showDone || m.status !== 'done') && inRange(m))
 
@@ -167,9 +172,12 @@ export default function App() {
           <div className="list-tools">
             <span className="tools-left">
               <label className="switch"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} /><span>完了済みも表示</span></label>
-              <button className={'chip small-chip' + (dueSoon ? ' on' : '')} onClick={() => setDueSoon(!dueSoon)} title="やることの期限で絞り込み">
-                <i className={'ti ' + (dueSoon ? 'ti-calendar-due' : 'ti-calendar')} /> {dueSoon ? `期限 14日以内${hiddenByDue ? `（+${hiddenByDue} 件非表示）` : ''}` : '全期間'}
-              </button>
+              <span className="seg" role="radiogroup" aria-label="やることの期限">
+                {[['today', '当日'], ['14d', '14日以内'], ['all', '全表示']].map(([k, label]) => (
+                  <button key={k} className={'seg-btn' + (dueRange === k ? ' on' : '')} onClick={() => setDueRange(k)} title={k === 'today' ? '期限が今日まで（期限切れ含む）のやること' : k === '14d' ? '期限が 14 日以内のやること' : 'すべてのやること'}>{label}</button>
+                ))}
+              </span>
+              {hiddenByDue > 0 && <span className="muted small">+{hiddenByDue} 件非表示</span>}
             </span>
             <span className="muted">{shown.length} 件 <button className="lnk" onClick={async () => { if (session?.ms?.connected) { try { await api.msSync() } catch {} } load() }} aria-label="更新（To Do も同期）" title="更新（To Do も同期）"><i className="ti ti-refresh" /></button></span>
           </div>
