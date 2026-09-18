@@ -172,6 +172,7 @@ export default function App() {
           <div className="list-tools">
             <span className="tools-left">
               <label className="switch"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} /><span>完了済みも表示</span></label>
+              <span className="seg-label"><i className="ti ti-calendar-due" /> 期限</span>
               <span className="seg" role="radiogroup" aria-label="やることの期限">
                 {[['today', '当日'], ['14d', '14日以内'], ['all', '全表示']].map(([k, label]) => (
                   <button key={k} className={'seg-btn' + (dueRange === k ? ' on' : '')} onClick={() => setDueRange(k)} title={k === 'today' ? '期限が今日まで（期限切れ含む）のやること' : k === '14d' ? '期限が 14 日以内のやること' : 'すべてのやること'}>{label}</button>
