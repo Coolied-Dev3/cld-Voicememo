@@ -324,6 +324,12 @@ app.patch('/api/memos/:id', h(async (req, res) => {
     try { await ms.setTaskCompleted(db, m.user_id, m, f.status === 'done'); await updateMemo(id, { outlook_error: null }) }
     catch (e) { console.warn('[graph] To Do の完了反映に失敗:', e.message); await updateMemo(id, { outlook_error: 'To Do の完了反映に失敗: ' + e.message }) }
   }
+  // やることの期限変更を Microsoft To Do にも反映
+  if ('due_at' in f && f.due_at && f.due_at !== m.due_at && (f.category || m.category) === 'todo' && m.outlook_status === 'done' && m.outlook_id
+      && ms.msEnabled && (await ms.isConnected(db, m.user_id))) {
+    try { await ms.setTaskDue(db, m.user_id, { ...m, due_at: f.due_at }); await updateMemo(id, { outlook_error: null }) }
+    catch (e) { console.warn('[graph] To Do の期限反映に失敗:', e.message); await updateMemo(id, { outlook_error: 'To Do の期限反映に失敗: ' + e.message }) }
+  }
   res.json(decorate(await getMemo(id, req.user.id)))
   if (reprocess) setImmediate(() => processMemo(id).catch(console.error))
 }))

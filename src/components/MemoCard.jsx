@@ -53,7 +53,21 @@ export default function MemoCard({ memo, onChange, outlookMode, autoOutlook, toa
         <div className="card-main">
           <div className="card-title" onClick={editTitle} title="タップで見出し編集">{memo.title || memo.text}</div>
           {memo.category === 'schedule' && <div className="card-meta"><i className="ti ti-calendar-event" /> {fmtRange(memo)}</div>}
-          {memo.category === 'todo' && memo.due_at && <div className="card-meta"><i className="ti ti-clock" /> 期限 {fmtDT(memo.due_at, /00:00:00$/.test(memo.due_at))}</div>}
+          {memo.category === 'todo' && (
+            <div className="card-meta due-edit">
+              <i className="ti ti-clock" /> 期限
+              <input
+                type="date"
+                className="due-input"
+                value={String(memo.due_at || '').slice(0, 10)}
+                disabled={busy}
+                aria-label="期限を変更"
+                title="期限を変更（To Do にも反映）"
+                onChange={(e) => { const v = e.target.value; if (v) run(() => api.updateMemo(memo.id, { due_at: v + ' 00:00:00' }), `期限を ${v.slice(5).replace('-', '/')} に変更しました`) }}
+              />
+              {memo.due_at && <span className="muted small">{fmtDT(memo.due_at, true).replace(/^[\d/]+/, '')}</span>}
+            </div>
+          )}
         </div>
         <div className="card-side">
           <select className={'badge c-' + memo.category} value={memo.category} onChange={changeCat} disabled={busy} aria-label="カテゴリ変更">
