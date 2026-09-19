@@ -13,6 +13,10 @@ export default function VoiceInput({ onSubmit, busy }) {
 
   useEffect(() => { try { localStorage.setItem(AUTO_KEY, autoSubmit ? '1' : '0') } catch {} }, [autoSubmit])
 
+  const [note, setNote] = useState('')
+  const [noteOpen, setNoteOpen] = useState(false)
+  const noteRef = useRef('')
+  useEffect(() => { noteRef.current = note }, [note])
   const inflight = useRef(false)
   const last = useRef({ text: '', at: 0 })
   const submit = async (t, source) => {
@@ -23,8 +27,8 @@ export default function VoiceInput({ onSubmit, busy }) {
     if (last.current.text === v && Date.now() - last.current.at < 5000) return
     inflight.current = true
     try {
-      const ok = await onSubmit(v, cat === 'auto' ? null : cat, source || sourceRef.current)
-      if (ok) { last.current = { text: v, at: Date.now() }; setText(''); sourceRef.current = 'text' }
+      const ok = await onSubmit(v, cat === 'auto' ? null : cat, source || sourceRef.current, noteRef.current.trim() || null)
+      if (ok) { last.current = { text: v, at: Date.now() }; setText(''); setNote(''); setNoteOpen(false); sourceRef.current = 'text' }
     } finally { inflight.current = false }
   }
 
@@ -78,6 +82,18 @@ export default function VoiceInput({ onSubmit, busy }) {
         onChange={(e) => { sourceRef.current = 'text'; setText(e.target.value) }}
         onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') submit() }}
       />
+
+      {noteOpen ? (
+        <textarea
+          className="ta note-ta"
+          rows={2}
+          value={note}
+          placeholder="備考（メモ）— 補足や詳細を入力。先に入力してから話すと一緒に登録されます"
+          onChange={(e) => setNote(e.target.value)}
+        />
+      ) : (
+        <button className="lnk note-add" onClick={() => setNoteOpen(true)}><i className="ti ti-note" /> 備考（メモ）を追加</button>
+      )}
 
       <div className="input-actions">
         <label className="switch">

@@ -16,7 +16,7 @@ export const MEMO_COLS = [
   'user_id', 'text', 'category', 'title', 'status',
   'start_at', 'end_at', 'all_day', 'due_at',
   'search_query', 'search_summary', 'search_sources', 'search_status',
-  'outlook_status', 'outlook_id', 'outlook_url', 'outlook_error',
+  'outlook_status', 'outlook_id', 'outlook_url', 'outlook_error', 'note',
   'source', 'ai_used', 'created_at', 'updated_at',
 ]
 
@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS memos (
   outlook_id      TEXT,
   outlook_url     TEXT,
   outlook_error   TEXT,
+  note            TEXT,
   source          TEXT NOT NULL DEFAULT 'text',
   ai_used         INTEGER NOT NULL DEFAULT 0,
   created_at      TEXT NOT NULL,
@@ -111,6 +112,7 @@ CREATE TABLE IF NOT EXISTS memos (
   outlook_id      VARCHAR(255) NULL,
   outlook_url     TEXT NULL,
   outlook_error   TEXT NULL,
+  note            TEXT NULL,
   source          VARCHAR(16) NOT NULL DEFAULT 'text',
   ai_used         TINYINT NOT NULL DEFAULT 0,
   created_at      DATETIME NOT NULL,
@@ -167,6 +169,7 @@ async function migrate(db) {
   const adds = [
     ['user_id', DRIVER === 'mysql' ? 'INT NULL' : 'INTEGER'],
     ['outlook_url', 'TEXT'],
+    ['note', 'TEXT'],
   ]
   for (const [col, type] of adds) {
     try { await db.get(`SELECT ${col} FROM memos LIMIT 1`) } catch {

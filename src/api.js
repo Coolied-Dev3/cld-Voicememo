@@ -50,7 +50,7 @@ export const listMemos = (params = {}) => {
   const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
   return req('/api/memos' + (q ? '?' + q : ''))
 }
-export const createMemo = (text, category, source) => req('/api/memos', { method: 'POST', body: { text, category, source } })
+export const createMemo = (text, category, source, note) => req('/api/memos', { method: 'POST', body: { text, category, source, note } })
 export const updateMemo = (id, fields) => req(`/api/memos/${id}`, { method: 'PATCH', body: fields })
 export const deleteMemo = (id) => req(`/api/memos/${id}`, { method: 'DELETE' })
 export const reprocessMemo = (id) => req(`/api/memos/${id}/process`, { method: 'POST' })

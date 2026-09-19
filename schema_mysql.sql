@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS memos (
   outlook_id      VARCHAR(255) NULL,                          -- Graph の予定/タスク ID または COM の EntryID
   outlook_url     TEXT NULL,                                  -- Outlook Web で開くリンク
   outlook_error   TEXT NULL,
+  note            TEXT NULL,                                  -- 備考（メモ）
   source          VARCHAR(16) NOT NULL DEFAULT 'text',        -- voice | text
   ai_used         TINYINT NOT NULL DEFAULT 0,
   created_at      DATETIME NOT NULL,

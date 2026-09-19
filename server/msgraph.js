@@ -109,6 +109,26 @@ async function graphFetch(token, path, opts = {}) {
 const pad = (n) => String(n).padStart(2, '0')
 const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`
 
+// Outlook / To Do に入れる本文: 原文＋備考＋管理用の注記。To Do から取り込んだものは備考＝To Do のメモ欄そのもの
+function bodyOf(memo) {
+  if (memo.source === 'todo') return memo.note || ''
+  return [memo.text, memo.note].filter(Boolean).join('\n\n') + `\n\n(cld-Voice Memo #${memo.id})`
+}
+
+// 備考の変更を To Do / Outlook 予定の本文に反映
+export async function setItemNote(db, userId, memo) {
+  if (!memo.outlook_id || !/^[A-Za-z0-9_=-]{40,}$/.test(memo.outlook_id)) return false
+  const token = await accessToken(db, userId)
+  const body = { body: { contentType: 'text', content: bodyOf(memo) } }
+  if (memo.category === 'todo') {
+    const list = await defaultTaskList(token)
+    await graphFetch(token, `/me/todo/lists/${encodeURIComponent(list.id)}/tasks/${encodeURIComponent(memo.outlook_id)}`, { method: 'PATCH', body })
+  } else if (memo.category === 'schedule') {
+    await graphFetch(token, `/me/events/${encodeURIComponent(memo.outlook_id)}`, { method: 'PATCH', body })
+  } else return false
+  return true
+}
+
 // 予定 → Outlook 予定表
 export async function createEvent(db, userId, memo) {
   const token = await accessToken(db, userId)
@@ -117,7 +137,7 @@ export async function createEvent(db, userId, memo) {
     method: 'POST',
     body: {
       subject: subjectOf(memo),
-      body: { contentType: 'text', content: `${memo.text}\n\n(cld-Voice Memo #${memo.id})` },
+      body: { contentType: 'text', content: bodyOf(memo) },
       start: { dateTime: iso(start), timeZone: TZ },
       end: { dateTime: iso(end), timeZone: TZ },
       isAllDay: allDay,
@@ -159,6 +179,8 @@ function fromGraphDT(dt) {
 }
 // 期限は日付だけを使う（終日）
 const dueFromGraph = (dt) => { const s = fromGraphDT(dt); return s ? s.slice(0, 10) + ' 00:00:00' : null }
+
+const graphBodyText = (body) => (body?.contentType === 'text' ? String(body.content || '') : String(body?.content || '').replace(/<[^>]+>/g, '')).trim()
 
 // 1 ユーザー分の同期。戻り値 { added, updated, removed }
 // 初回はデルタリンクが無いので全件を読み、未完了のものだけ取り込む。以降は変更分だけ。
@@ -202,6 +224,11 @@ export async function syncTasks(db, userId) {
       if (t.title && t.title !== memo.title && memo.category === 'todo') f.title = t.title.slice(0, 255)
       const due = dueFromGraph(t.dueDateTime)
       if (memo.category === 'todo' && due && due !== memo.due_at) f.due_at = due
+      // To Do 由来のタスクは、To Do のメモ欄を備考として取り込む
+      if (memo.source === 'todo' && t.body) {
+        const b = graphBodyText(t.body)
+        if (!b.includes('cld-Voice Memo') && b !== (memo.note || '')) f.note = b.slice(0, 4000) || null
+      }
       if (Object.keys(f).length) {
         f.updated_at = nowStr()
         await db.run(`UPDATE memos SET ${Object.keys(f).map((k) => k + '=?').join(',')} WHERE id=?`, [...Object.values(f), memo.id])
@@ -213,11 +240,12 @@ export async function syncTasks(db, userId) {
     if (done && !memo) continue     // 取り込み前に完了したものは無視
     const title = String(t.title || '').trim().slice(0, 255)
     if (!title) continue
-    const bodyText = (t.body?.contentType === 'text' ? t.body.content : String(t.body?.content || '').replace(/<[^>]+>/g, '')).trim()
-    const text = bodyText && !bodyText.includes('cld-Voice Memo') ? `${title}\n${bodyText}`.slice(0, 2000) : title
+    const bodyText = graphBodyText(t.body)
+    const text = title
+    const note = bodyText && !bodyText.includes('cld-Voice Memo') ? bodyText.slice(0, 4000) : null
     const created = t.createdDateTime ? nowStr(new Date(t.createdDateTime)) : nowStr()
-    const cols = ['user_id', 'text', 'category', 'title', 'status', 'due_at', 'all_day', 'search_status', 'outlook_status', 'outlook_id', 'outlook_url', 'source', 'ai_used', 'created_at', 'updated_at']
-    const vals = [userId, text, 'todo', title, done ? 'done' : 'open', dueFromGraph(t.dueDateTime) || created.slice(0, 10) + ' 00:00:00', 0, 'none', 'done', t.id, 'https://to-do.office.com/tasks/', 'todo', 0, created, nowStr()]
+    const cols = ['user_id', 'text', 'category', 'title', 'status', 'due_at', 'all_day', 'search_status', 'outlook_status', 'outlook_id', 'outlook_url', 'note', 'source', 'ai_used', 'created_at', 'updated_at']
+    const vals = [userId, text, 'todo', title, done ? 'done' : 'open', dueFromGraph(t.dueDateTime) || created.slice(0, 10) + ' 00:00:00', 0, 'none', 'done', t.id, 'https://to-do.office.com/tasks/', note, 'todo', 0, created, nowStr()]
     await db.run(`INSERT INTO memos (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`, vals)
     r.added++
   }
@@ -308,7 +336,7 @@ export async function createTask(db, userId, memo) {
   const list = await defaultTaskList(token)
   const body = {
     title: (memo.title || memo.text).slice(0, 255),
-    body: { contentType: 'text', content: `${memo.text}\n\n(cld-Voice Memo #${memo.id})` },
+    body: { contentType: 'text', content: bodyOf(memo) },
   }
   if (memo.due_at) {
     const { start } = eventWindow({ ...memo, start_at: memo.due_at })

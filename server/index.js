@@ -242,7 +242,7 @@ app.get('/api/memos', h(async (req, res) => {
   const where = ['user_id=?'], params = [req.user.id]
   if (category && CATEGORIES.includes(category)) { where.push('category=?'); params.push(category) }
   if (status) { where.push('status=?'); params.push(status) }
-  if (q) { where.push('(text LIKE ? OR title LIKE ? OR search_summary LIKE ?)'); params.push(`%${q}%`, `%${q}%`, `%${q}%`) }
+  if (q) { where.push('(text LIKE ? OR title LIKE ? OR search_summary LIKE ? OR note LIKE ?)'); params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`) }
   const rows = await db.all(`SELECT * FROM memos WHERE ${where.join(' AND ')} ORDER BY id DESC LIMIT 500`, params)
   res.json(rows.map(decorate))
 }))
@@ -288,6 +288,7 @@ app.post('/api/memos', h(async (req, res) => {
     search_query: c.search_query, search_summary: null, search_sources: null,
     ...initialStatus(c.category),
     outlook_id: null, outlook_url: null, outlook_error: null,
+    note: String(req.body.note || '').trim().slice(0, 4000) || null,
     source: req.body.source === 'voice' ? 'voice' : 'text', ai_used: c.ai_used ? 1 : 0,
     created_at: now, updated_at: now,
   }
@@ -303,6 +304,7 @@ app.patch('/api/memos/:id', h(async (req, res) => {
   const b = req.body || {}
   const f = {}
   for (const k of ['title', 'text', 'status', 'start_at', 'end_at', 'due_at', 'search_query']) if (k in b) f[k] = b[k]
+  if ('note' in b) f.note = String(b.note || '').trim().slice(0, 4000) || null
   if ('all_day' in b) f.all_day = b.all_day ? 1 : 0
   let reprocess = false
   if (b.category && CATEGORIES.includes(b.category) && b.category !== m.category) {
@@ -323,6 +325,12 @@ app.patch('/api/memos/:id', h(async (req, res) => {
       && ms.msEnabled && (await ms.isConnected(db, m.user_id))) {
     try { await ms.setTaskCompleted(db, m.user_id, m, f.status === 'done'); await updateMemo(id, { outlook_error: null }) }
     catch (e) { console.warn('[graph] To Do の完了反映に失敗:', e.message); await updateMemo(id, { outlook_error: 'To Do の完了反映に失敗: ' + e.message }) }
+  }
+  // 備考の変更を To Do / Outlook 予定の本文にも反映
+  if ('note' in f && (f.note || null) !== (m.note || null) && m.outlook_status === 'done' && m.outlook_id
+      && ms.msEnabled && (await ms.isConnected(db, m.user_id))) {
+    try { await ms.setItemNote(db, m.user_id, { ...m, note: f.note }) }
+    catch (e) { console.warn('[graph] 備考の反映に失敗:', e.message); await updateMemo(id, { outlook_error: '備考の反映に失敗: ' + e.message }) }
   }
   // やることの期限変更を Microsoft To Do にも反映
   if ('due_at' in f && f.due_at && f.due_at !== m.due_at && (f.category || m.category) === 'todo' && m.outlook_status === 'done' && m.outlook_id

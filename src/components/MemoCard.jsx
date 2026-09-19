@@ -27,6 +27,8 @@ export default function MemoCard({ memo, onChange, outlookMode, autoOutlook, toa
   const [open, setOpen] = useState(false)
   const [sumOpen, setSumOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [noteEdit, setNoteEdit] = useState(false)
+  const [noteDraft, setNoteDraft] = useState('')
   const c = CAT_MAP[memo.category] || CAT_MAP.idea
   const done = memo.status === 'done'
 
@@ -83,6 +85,21 @@ export default function MemoCard({ memo, onChange, outlookMode, autoOutlook, toa
         <div className={'card-text' + (open ? ' open' : '')} onClick={() => setOpen(!open)}>{memo.text}</div>
       )}
 
+      {/* 備考（メモ） */}
+      {noteEdit ? (
+        <div className="note-box editing">
+          <textarea className="ta note-ta" rows={3} value={noteDraft} autoFocus placeholder="備考（メモ）" onChange={(e) => setNoteDraft(e.target.value)} />
+          <div className="note-actions">
+            <button className="btn-ghost" onClick={() => setNoteEdit(false)} disabled={busy}>キャンセル</button>
+            <button className="btn-note-save" disabled={busy} onClick={async () => { await run(() => api.updateMemo(memo.id, { note: noteDraft }), '備考を保存しました'); setNoteEdit(false) }}><i className="ti ti-check" /> 保存</button>
+          </div>
+        </div>
+      ) : memo.note ? (
+        <div className="note-box" onClick={() => { setNoteDraft(memo.note || ''); setNoteEdit(true) }} title="タップで備考を編集">
+          <i className="ti ti-note" /><span className="note-text">{memo.note}</span>
+        </div>
+      ) : null}
+
       {memo.category === 'search' && (
         <div className="search-box">
           {memo.search_status === 'pending' && <div className="pending"><span className="spin" /> Web で検索中…</div>}
@@ -132,7 +149,10 @@ export default function MemoCard({ memo, onChange, outlookMode, autoOutlook, toa
         <span className="ts" title={memo.source === 'todo' ? 'Microsoft To Do から取り込み' : memo.source === 'voice' ? '音声入力' : 'キーボード入力'}>
           <i className={'ti ' + (memo.source === 'todo' ? 'ti-checklist' : memo.source === 'voice' ? 'ti-microphone' : 'ti-keyboard')} /> {fmtCreated(memo.created_at)}{memo.source === 'todo' ? ' · To Do' : ''}{memo.ai_used ? ' · AI' : ''}
         </span>
-        <button className="lnk danger" onClick={del} disabled={busy}><i className="ti ti-trash" /> 削除</button>
+        <span className="foot-actions">
+          {!memo.note && !noteEdit && <button className="lnk" onClick={() => { setNoteDraft(''); setNoteEdit(true) }} disabled={busy}><i className="ti ti-note" /> 備考</button>}
+          <button className="lnk danger" onClick={del} disabled={busy}><i className="ti ti-trash" /> 削除</button>
+        </span>
       </div>
     </article>
   )

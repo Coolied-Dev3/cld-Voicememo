@@ -96,10 +96,10 @@ export default function App() {
 
   useEffect(() => { try { localStorage.setItem('vm.tab', tab) } catch {} }, [tab])
 
-  const onSubmit = async (text, category, source) => {
+  const onSubmit = async (text, category, source, note) => {
     setBusy(true)
     try {
-      const m = await api.createMemo(text, category, source)
+      const m = await api.createMemo(text, category, source, note)
       setMemos((list) => [m, ...list])
       const c = CATS.find((x) => x.key === m.category)
       toast(`「${c?.label}」に登録しました${m.category === 'search' ? '（検索中…）' : ''}`)
