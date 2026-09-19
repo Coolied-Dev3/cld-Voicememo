@@ -88,7 +88,7 @@ export default function MemoCard({ memo, onChange, outlookMode, autoOutlook, toa
       {/* 備考（メモ） */}
       {noteEdit ? (
         <div className="note-box editing">
-          <textarea className="ta note-ta" rows={3} value={noteDraft} autoFocus placeholder="備考（メモ）" onChange={(e) => setNoteDraft(e.target.value)} />
+          <textarea className="ta note-ta" rows={3} value={noteDraft} autoFocus placeholder="備考（メモ登録）" onChange={(e) => setNoteDraft(e.target.value)} />
           <div className="note-actions">
             <button className="btn-ghost" onClick={() => setNoteEdit(false)} disabled={busy}>キャンセル</button>
             <button className="btn-note-save" disabled={busy} onClick={async () => { await run(() => api.updateMemo(memo.id, { note: noteDraft }), '備考を保存しました'); setNoteEdit(false) }}><i className="ti ti-check" /> 保存</button>
@@ -150,7 +150,7 @@ export default function MemoCard({ memo, onChange, outlookMode, autoOutlook, toa
           <i className={'ti ' + (memo.source === 'todo' ? 'ti-checklist' : memo.source === 'voice' ? 'ti-microphone' : 'ti-keyboard')} /> {fmtCreated(memo.created_at)}{memo.source === 'todo' ? ' · To Do' : ''}{memo.ai_used ? ' · AI' : ''}
         </span>
         <span className="foot-actions">
-          {!memo.note && !noteEdit && <button className="lnk" onClick={() => { setNoteDraft(''); setNoteEdit(true) }} disabled={busy}><i className="ti ti-note" /> 備考</button>}
+          {!memo.note && !noteEdit && <button className="lnk" onClick={() => { setNoteDraft(''); setNoteEdit(true) }} disabled={busy}><i className="ti ti-note" /> <b>備考（メモ登録）</b></button>}
           <button className="lnk danger" onClick={del} disabled={busy}><i className="ti ti-trash" /> 削除</button>
         </span>
       </div>

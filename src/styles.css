@@ -233,3 +233,5 @@ a{color:var(--acc)}
 @media (min-width:1280px){
   .list{display:grid;grid-template-columns:1fr 1fr;align-items:start}
 }
+
+.note-add b,.foot-actions b{font-weight:700}

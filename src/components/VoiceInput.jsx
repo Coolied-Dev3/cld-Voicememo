@@ -88,11 +88,11 @@ export default function VoiceInput({ onSubmit, busy }) {
           className="ta note-ta"
           rows={2}
           value={note}
-          placeholder="備考（メモ）— 補足や詳細を入力。先に入力してから話すと一緒に登録されます"
+          placeholder="備考（メモ登録）— 補足や詳細を入力。先に入力してから話すと一緒に登録されます"
           onChange={(e) => setNote(e.target.value)}
         />
       ) : (
-        <button className="lnk note-add" onClick={() => setNoteOpen(true)}><i className="ti ti-note" /> 備考（メモ）を追加</button>
+        <button className="lnk note-add" onClick={() => setNoteOpen(true)}><i className="ti ti-note" /> <b>備考（メモ登録）</b></button>
       )}
 
       <div className="input-actions">
